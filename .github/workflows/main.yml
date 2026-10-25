@@ -1,5 +1,5 @@
 
-name: Build Android APK
+name: Build Standalone Android APK
 
 on:
   workflow_dispatch:
@@ -45,16 +45,16 @@ jobs:
       - name: Generate Android project
         run: npx expo prebuild --platform android --non-interactive
 
-      - name: Build Android APK
+      - name: Build standalone APK
         run: |
           chmod +x android/gradlew
           cd android
-          ./gradlew assembleDebug
+          ./gradlew assembleRelease
 
-      - name: Upload APK
+      - name: Upload standalone APK
         uses: actions/upload-artifact@v4
         with:
-          name: Android-APK
-          path: android/app/build/outputs/apk/debug/*.apk
+          name: Standalone-Android-APK
+          path: android/app/build/outputs/apk/release/*.apk
           if-no-files-found: error
           retention-days: 7
