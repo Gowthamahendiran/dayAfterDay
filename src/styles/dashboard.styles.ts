@@ -1,0 +1,342 @@
+import { StyleSheet, Platform, StatusBar } from 'react-native';
+
+export const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+  container: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+  scrollContent: {
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 12 : 12,
+    paddingBottom: 32,
+  },
+
+  // Main Header
+  header: {
+    paddingHorizontal: 20,
+    marginBottom: 16,
+    marginTop: 4,
+  },
+  headerTitle: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#0f172a',
+    letterSpacing: -0.5,
+  },
+
+  // Current Streak Card
+  streakCard: {
+    backgroundColor: '#fff9f2',
+    marginHorizontal: 20,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: '#fed7aa',
+    padding: 18,
+    marginBottom: 16,
+  },
+  streakTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 18,
+  },
+  streakLeftInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  flameCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#ffedd5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 14,
+  },
+  streakTextCol: {
+    flex: 1,
+  },
+  streakLabel: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#8a92a6',
+    marginBottom: 2,
+  },
+  streakDaysValue: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#0f172a',
+    marginBottom: 2,
+  },
+  streakSubtext: {
+    fontSize: 12.5,
+    fontWeight: '500',
+    color: '#64748b',
+  },
+  streakChevron: {
+    paddingLeft: 8,
+  },
+  streakDaysRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 2,
+  },
+  streakDayCol: {
+    alignItems: 'center',
+    width: 38,
+  },
+  streakDayName: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#8a92a6',
+    marginBottom: 8,
+  },
+  streakCheckCircle: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#10b981',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  streakEmptyCircle: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#eef2f6',
+  },
+  streakDateNum: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#1e293b',
+    marginTop: 8,
+  },
+
+  // This Week Card
+  thisWeekCard: {
+    backgroundColor: '#ffffff',
+    marginHorizontal: 20,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    padding: 18,
+    marginBottom: 16,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  thisWeekHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  thisWeekTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  thisWeekSubtitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  thisWeekSubtitleText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  progressBarTrack: {
+    height: 8,
+    backgroundColor: '#edf2f7',
+    borderRadius: 4,
+    marginVertical: 16,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: '#007aff',
+    borderRadius: 4,
+  },
+  metricsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'space-between',
+  },
+  metricBox: {
+    flex: 1,
+    borderRadius: 14,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  metricValue: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0f172a',
+    marginTop: 5,
+    marginBottom: 2,
+  },
+  metricLabel: {
+    fontSize: 10.5,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+
+  // Today's Tasks Preview Card
+  todayTasksCard: {
+    backgroundColor: '#ffffff',
+    marginHorizontal: 20,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    padding: 18,
+    marginBottom: 16,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  todayTasksHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  todayTasksTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  todayTasksSubtitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  todayTasksSubtitleText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  taskItemBox: {
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    borderRadius: 16,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  taskLeftRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  taskCheckbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.8,
+    borderColor: '#94a3b8',
+    marginRight: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+  },
+  taskCheckboxChecked: {
+    backgroundColor: '#007aff',
+    borderColor: '#007aff',
+  },
+  taskTitleText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1e293b',
+  },
+  taskTitleChecked: {
+    textDecorationLine: 'line-through',
+    color: '#94a3b8',
+  },
+  categoryBadge: {
+    backgroundColor: '#e6f9f0',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  categoryBadgeText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#10b981',
+  },
+
+  // Weekly Activity Card
+  weeklyActivityCard: {
+    backgroundColor: '#ffffff',
+    marginHorizontal: 20,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    padding: 18,
+    marginBottom: 20,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  weeklyActivityHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  weeklyActivityTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  dropdownBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  dropdownText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  barChartContainer: {
+    height: 130,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    paddingTop: 10,
+    paddingHorizontal: 4,
+  },
+  barCol: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    height: '100%',
+  },
+  barPill: {
+    width: 26,
+    borderRadius: 6,
+    backgroundColor: '#4f96fd',
+  },
+  barLabel: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#8a92a6',
+    marginTop: 10,
+  },
+});
