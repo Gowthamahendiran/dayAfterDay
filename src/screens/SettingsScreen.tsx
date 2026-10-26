@@ -3,7 +3,6 @@ import {
   View,
   Text,
   ScrollView,
-  SafeAreaView,
   TouchableOpacity,
   Alert,
 } from 'react-native';
@@ -109,10 +108,12 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Top Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Settings</Text>
+    <View style={styles.container}>
+      {/* Sticky Top Header */}
+      <View style={styles.stickyHeader}>
+        <View style={styles.headerRow}>
+          <Text style={styles.headerTitle}>Settings</Text>
+        </View>
       </View>
 
       <ScrollView
@@ -289,6 +290,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           <Text style={styles.logoutText}>Log Out</Text>
         </TouchableOpacity>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };

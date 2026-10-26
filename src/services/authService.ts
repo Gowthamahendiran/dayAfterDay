@@ -15,10 +15,17 @@ import {
   where,
   getDocs,
 } from 'firebase/firestore';
+import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth, db } from '../config/firebase';
 
 const USER_SESSION_KEY = '@dayafterday_user_session';
+const USER_CREDS_KEY = '@dayafterday_user_creds';
+
+export interface UserCredentials {
+  identifier: string;
+  pass: string;
+}
 
 export interface UserRecord {
   userId: string;
@@ -67,8 +74,8 @@ export async function signUpUser(
     console.warn('Failed to write to userTable collection in Firestore:', err);
   }
 
-  // 4. Save session to local storage
-  await AsyncStorage.setItem(USER_SESSION_KEY, JSON.stringify(userRecord));
+  // 4. Save session and credentials to local storage (app level & browser level)
+  await saveUserSession(userRecord, { identifier: trimmedEmail, pass });
 
   return userRecord;
 }
@@ -134,14 +141,40 @@ export async function loginUser(
     }
   }
 
-  // 3. Save session to local storage
-  await AsyncStorage.setItem(USER_SESSION_KEY, JSON.stringify(userRecord));
+  // 3. Save session and credentials to local storage (app level & browser level)
+  await saveUserSession(userRecord, { identifier, pass });
 
   return userRecord;
 }
 
 /**
- * Sign out and clear stored session
+ * Save user session and credentials to AsyncStorage and localStorage (browser)
+ */
+export async function saveUserSession(
+  userRecord: UserRecord,
+  creds?: UserCredentials
+): Promise<void> {
+  try {
+    const json = JSON.stringify(userRecord);
+    await AsyncStorage.setItem(USER_SESSION_KEY, json);
+    if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
+      localStorage.setItem(USER_SESSION_KEY, json);
+    }
+
+    if (creds) {
+      const credsJson = JSON.stringify(creds);
+      await AsyncStorage.setItem(USER_CREDS_KEY, credsJson);
+      if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
+        localStorage.setItem(USER_CREDS_KEY, credsJson);
+      }
+    }
+  } catch (err) {
+    console.warn('Error saving user session:', err);
+  }
+}
+
+/**
+ * Sign out and clear stored session and credentials
  */
 export async function logoutUser(): Promise<void> {
   try {
@@ -149,11 +182,20 @@ export async function logoutUser(): Promise<void> {
   } catch (err) {
     console.warn('Sign out error:', err);
   }
-  await AsyncStorage.removeItem(USER_SESSION_KEY);
+  try {
+    await AsyncStorage.removeItem(USER_SESSION_KEY);
+    await AsyncStorage.removeItem(USER_CREDS_KEY);
+    if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
+      localStorage.removeItem(USER_SESSION_KEY);
+      localStorage.removeItem(USER_CREDS_KEY);
+    }
+  } catch (err) {
+    console.warn('Error removing cached session:', err);
+  }
 }
 
 /**
- * Retrieve cached user from local storage
+ * Retrieve cached user from local storage (AsyncStorage + localStorage fallback)
  */
 export async function getCachedUser(): Promise<UserRecord | null> {
   try {
@@ -161,8 +203,35 @@ export async function getCachedUser(): Promise<UserRecord | null> {
     if (raw) {
       return JSON.parse(raw) as UserRecord;
     }
+    if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
+      const webRaw = localStorage.getItem(USER_SESSION_KEY);
+      if (webRaw) {
+        return JSON.parse(webRaw) as UserRecord;
+      }
+    }
   } catch (err) {
     console.warn('Error reading cached user session:', err);
+  }
+  return null;
+}
+
+/**
+ * Retrieve cached credentials from local storage
+ */
+export async function getCachedCreds(): Promise<UserCredentials | null> {
+  try {
+    const raw = await AsyncStorage.getItem(USER_CREDS_KEY);
+    if (raw) {
+      return JSON.parse(raw) as UserCredentials;
+    }
+    if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
+      const webRaw = localStorage.getItem(USER_CREDS_KEY);
+      if (webRaw) {
+        return JSON.parse(webRaw) as UserCredentials;
+      }
+    }
+  } catch (err) {
+    console.warn('Error reading cached user credentials:', err);
   }
   return null;
 }
@@ -180,7 +249,7 @@ export function subscribeToAuthState(
         const userDoc = await getDoc(userDocRef);
         if (userDoc.exists()) {
           const data = userDoc.data() as UserRecord;
-          await AsyncStorage.setItem(USER_SESSION_KEY, JSON.stringify(data));
+          await saveUserSession(data);
           callback(data);
           return;
         }
@@ -195,10 +264,11 @@ export function subscribeToAuthState(
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
-      await AsyncStorage.setItem(USER_SESSION_KEY, JSON.stringify(fallback));
+      await saveUserSession(fallback);
       callback(fallback);
     } else {
-      await AsyncStorage.removeItem(USER_SESSION_KEY);
+      // Do not wipe cached session here because Firebase triggers null on startup
+      // before connecting or in offline/native initialization.
       callback(null);
     }
   });

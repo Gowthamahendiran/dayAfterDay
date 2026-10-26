@@ -117,15 +117,18 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
   return (
     <View style={styles.container}>
+      {/* Sticky Main Header */}
+      <View style={styles.stickyHeader}>
+        <View style={styles.headerRow}>
+          <Text style={styles.headerTitle}>Dashboard</Text>
+        </View>
+      </View>
+
       <ScrollView
-        style={styles.container}
+        style={styles.scrollArea}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Main Title Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Dashboard</Text>
-        </View>
 
         {/* Current Streak Card */}
         <TouchableOpacity
@@ -240,15 +243,13 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           {/* If user has real tasks, render the first one or the "Drink water" default */}
           {hasRealTasks ? (
             realTasks.slice(0, 2).map((task) => (
-              <View
+              <TouchableOpacity
                 key={task.id}
                 style={[styles.taskItemBox, { marginBottom: 8 }]}
+                activeOpacity={0.7}
+                onPress={() => handleToggleRealTask(task)}
               >
-                <TouchableOpacity
-                  style={styles.taskLeftRow}
-                  activeOpacity={0.7}
-                  onPress={() => handleToggleRealTask(task)}
-                >
+                <View style={styles.taskLeftRow}>
                   <View
                     style={[
                       styles.taskCheckbox,
@@ -268,7 +269,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                   >
                     {task.title}
                   </Text>
-                </TouchableOpacity>
+                </View>
 
                 <View style={styles.categoryBadge}>
                   <Text style={styles.categoryBadgeText}>
@@ -279,16 +280,16 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                       : '⭐ ' + task.category}
                   </Text>
                 </View>
-              </View>
+              </TouchableOpacity>
             ))
           ) : (
             /* Default Mockup Task: "Drink water" matching screenshot */
-            <View style={styles.taskItemBox}>
-              <TouchableOpacity
-                style={styles.taskLeftRow}
-                activeOpacity={0.7}
-                onPress={() => setIsWaterCompleted((prev) => !prev)}
-              >
+            <TouchableOpacity
+              style={styles.taskItemBox}
+              activeOpacity={0.7}
+              onPress={() => setIsWaterCompleted((prev) => !prev)}
+            >
+              <View style={styles.taskLeftRow}>
                 <View
                   style={[
                     styles.taskCheckbox,
@@ -307,12 +308,12 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 >
                   Drink water
                 </Text>
-              </TouchableOpacity>
+              </View>
 
               <View style={styles.categoryBadge}>
                 <Text style={styles.categoryBadgeText}>💚 Health</Text>
               </View>
-            </View>
+            </TouchableOpacity>
           )}
         </View>
 

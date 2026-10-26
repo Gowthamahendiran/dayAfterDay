@@ -8,6 +8,8 @@ import { CreateTaskScreen } from './src/screens/CreateTaskScreen';
 import { DashboardScreen } from './src/screens/DashboardScreen';
 import {
   getCachedUser,
+  getCachedCreds,
+  loginUser,
   subscribeToAuthState,
   logoutUser,
   UserRecord,
@@ -49,13 +51,28 @@ export default function App() {
   useEffect(() => {
     let isMounted = true;
 
-    // 1. Immediately check cached session in AsyncStorage
+    // 1. Immediately check cached session & credentials in local storage
     const restoreSession = async () => {
       try {
         const cached = await getCachedUser();
         if (cached && isMounted) {
           setCurrentUser(cached);
           setCurrentScreen('tasks');
+          setIsInitializing(false);
+        }
+
+        // Auto-login with saved credentials in the background
+        const creds = await getCachedCreds();
+        if (creds) {
+          try {
+            const user = await loginUser(creds.identifier, creds.pass);
+            if (isMounted) {
+              setCurrentUser(user);
+              setCurrentScreen('tasks');
+            }
+          } catch (autoLoginErr) {
+            console.log('Silent auto-login background note:', autoLoginErr);
+          }
         }
       } catch (err) {
         console.warn('Session restore note:', err);
@@ -74,10 +91,8 @@ export default function App() {
       if (user) {
         setCurrentUser(user);
         setCurrentScreen('tasks');
-      } else {
-        setCurrentUser(null);
+        setIsInitializing(false);
       }
-      setIsInitializing(false);
     });
 
     return () => {

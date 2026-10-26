@@ -3,28 +3,36 @@ import { StyleSheet, Platform, StatusBar } from 'react-native';
 export const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#ffffff',
   },
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#ffffff',
   },
-  scrollContent: {
-    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 12 : 12,
-    paddingBottom: 32,
+  stickyHeader: {
+    backgroundColor: '#ffffff',
+    zIndex: 10,
   },
-
-  // Main Header
-  header: {
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 20,
-    marginBottom: 16,
-    marginTop: 4,
+    paddingTop: Platform.OS === 'ios' ? 18 : 12,
+    paddingBottom: 16,
+    minHeight: Platform.OS === 'ios' ? 78 : 72,
   },
   headerTitle: {
     fontSize: 32,
     fontWeight: '800',
     color: '#0f172a',
-    letterSpacing: -0.5,
+    letterSpacing: -0.6,
+  },
+  scrollArea: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingTop: 4,
+    paddingBottom: 32,
   },
 
   // Current Streak Card

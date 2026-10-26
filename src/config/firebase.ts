@@ -1,6 +1,7 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { getAuth, Auth } from 'firebase/auth';
+import { getAuth, Auth, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
+import { Platform } from 'react-native';
 
 const firebaseConfig = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY || 'AIzaSyAC1o0bogfuvQEr79JiLzlfATwrCK0tXM8',
@@ -22,6 +23,12 @@ try {
   app = getApps().length === 0 ? initializeApp(firebaseConfig, 'fallback-app') : getApp();
   auth = getAuth(app);
   db = getFirestore(app);
+}
+
+if (Platform.OS === 'web') {
+  try {
+    setPersistence(auth, browserLocalPersistence).catch(() => {});
+  } catch {}
 }
 
 export { app, auth, db };

@@ -30,7 +30,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         task.completed && styles.cardCompleted,
         isReadOnly && styles.cardReadOnly,
       ]}
-      activeOpacity={0.9}
+      activeOpacity={isReadOnly ? 0.9 : 0.7}
+      onPress={() => onToggle(task.id, task.completed)}
       onLongPress={() => {
         if (!isReadOnly && onLongPress) {
           onLongPress(task.id);
@@ -38,12 +39,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       }}
     >
       {/* Checkbox */}
-      <TouchableOpacity
-        style={styles.checkboxTouch}
-        onPress={() => onToggle(task.id, task.completed)}
-        activeOpacity={isReadOnly ? 0.9 : 0.7}
-        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-      >
+      <View style={styles.checkboxTouch}>
         <View
           style={[
             styles.checkbox,
@@ -57,7 +53,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             <Ionicons name="lock-closed" size={10} color="#cbd5e1" />
           ) : null}
         </View>
-      </TouchableOpacity>
+      </View>
 
       {/* Task Title */}
       <Text

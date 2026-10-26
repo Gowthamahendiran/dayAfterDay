@@ -24,6 +24,7 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: Platform.OS === 'ios' ? 18 : 12,
     paddingBottom: 16,
+    minHeight: Platform.OS === 'ios' ? 78 : 72,
   },
   headerTitle: {
     fontSize: 32,

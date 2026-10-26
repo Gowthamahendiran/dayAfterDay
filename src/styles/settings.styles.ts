@@ -3,14 +3,19 @@ import { StyleSheet, Platform, StatusBar } from 'react-native';
 export const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
-    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 8 : 0,
+    backgroundColor: '#ffffff',
   },
-  header: {
+  stickyHeader: {
+    backgroundColor: '#ffffff',
+    zIndex: 10,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 18 : 14,
+    paddingTop: Platform.OS === 'ios' ? 18 : 12,
     paddingBottom: 16,
-    backgroundColor: '#f8fafc',
+    minHeight: Platform.OS === 'ios' ? 78 : 72,
   },
   headerTitle: {
     fontSize: 32,
@@ -20,6 +25,7 @@ export const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 20,
+    paddingTop: 4,
     paddingBottom: 40,
   },
   profileCard: {
