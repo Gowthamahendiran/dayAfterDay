@@ -27,18 +27,23 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
           return (
             <TouchableOpacity
               key={tab.key}
-              style={[styles.tabButton, isActive && styles.tabButtonActive]}
+              style={styles.tabWrapper}
               onPress={() => onTabPress(tab.key)}
               activeOpacity={0.7}
             >
-              <Ionicons
-                name={isActive ? tab.activeIcon : tab.icon}
-                size={22}
-                color={isActive ? '#007aff' : '#94a3b8'}
-              />
-              <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
-                {tab.label}
-              </Text>
+              <View style={[styles.tabButton, isActive && styles.tabButtonActive]}>
+                <Ionicons
+                  name={isActive ? tab.activeIcon : tab.icon}
+                  size={22}
+                  color={isActive ? '#007aff' : '#94a3b8'}
+                />
+                <Text
+                  style={[styles.tabLabel, isActive && styles.tabLabelActive]}
+                  numberOfLines={1}
+                >
+                  {tab.label}
+                </Text>
+              </View>
             </TouchableOpacity>
           );
         })}
@@ -57,15 +62,20 @@ const styles = StyleSheet.create({
   },
   tabsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
     alignItems: 'center',
     paddingHorizontal: 16,
   },
+  tabWrapper: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   tabButton: {
+    width: '100%',
+    maxWidth: 96,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 7,
-    paddingHorizontal: 24,
     borderRadius: 16,
   },
   tabButtonActive: {

@@ -8,13 +8,6 @@ export const styles = StyleSheet.create({
   },
   stickyHeader: {
     backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#edf2f7',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    elevation: 2,
     zIndex: 10,
   },
   headerRow: {
@@ -32,18 +25,22 @@ export const styles = StyleSheet.create({
     color: '#0f172a',
     letterSpacing: -0.6,
   },
-  addButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 13,
+  fabButton: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: '#007aff',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#007aff',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 6,
+    zIndex: 99,
   },
   progressCard: {
     marginHorizontal: 20,
@@ -88,7 +85,7 @@ export const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 20,
     paddingTop: 18,
-    paddingBottom: 36,
+    paddingBottom: 90,
   },
   loadingContainer: {
     flex: 1,

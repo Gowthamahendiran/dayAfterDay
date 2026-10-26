@@ -241,19 +241,11 @@ export const TodayTasksScreen: React.FC<TodayTasksScreenProps> = ({
       {/* Tasks Screen */}
       {activeTab === 'Tasks' && (
         <View style={{ flex: 1 }}>
-          {/* Sticky Header Section with Bottom Border */}
+          {/* Sticky Header Section */}
           <View style={styles.stickyHeader}>
-            {/* Header Row: Tasks Title & Add Button */}
+            {/* Header Row: Tasks Title */}
             <View style={styles.headerRow}>
               <Text style={styles.headerTitle}>Tasks</Text>
-              <TouchableOpacity
-                style={styles.addButton}
-                onPress={() => onNavigate('create-task')}
-                activeOpacity={0.8}
-                accessibilityLabel="Create New Task"
-              >
-                <Ionicons name="add" size={26} color="#ffffff" />
-              </TouchableOpacity>
             </View>
 
             {/* 7-day Weekly Date Selector (with Week Switcher Row above dates) */}
@@ -381,6 +373,16 @@ export const TodayTasksScreen: React.FC<TodayTasksScreenProps> = ({
               </ScrollView>
             )}
           </View>
+
+          {/* Floating Circle + Button (above bottom nav, bottom right) */}
+          <TouchableOpacity
+            style={styles.fabButton}
+            onPress={() => onNavigate('create-task')}
+            activeOpacity={0.85}
+            accessibilityLabel="Create New Task"
+          >
+            <Ionicons name="add" size={32} color="#ffffff" />
+          </TouchableOpacity>
         </View>
       )}
 

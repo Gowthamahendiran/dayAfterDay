@@ -132,7 +132,7 @@ export const CreateTaskScreen: React.FC<CreateTaskScreenProps> = ({
           activeOpacity={0.7}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Ionicons name="arrow-back" size={20} color="#4338ca" />
+          <Ionicons name="arrow-back" size={20} color="#007aff" />
         </TouchableOpacity>
 
         <Text style={styles.headerTitle}>Create Task</Text>
@@ -152,7 +152,7 @@ export const CreateTaskScreen: React.FC<CreateTaskScreenProps> = ({
           <View style={styles.sectionCard}>
             <View style={styles.sectionHeader}>
               <View style={styles.sectionIconSquircle}>
-                <Ionicons name="document-text-outline" size={20} color="#5246e2" />
+                <Ionicons name="document-text-outline" size={20} color="#007aff" />
               </View>
               <View style={styles.sectionHeaderTextCol}>
                 <Text style={styles.sectionTitle}>Task Title</Text>
@@ -183,7 +183,7 @@ export const CreateTaskScreen: React.FC<CreateTaskScreenProps> = ({
           <View style={styles.sectionCard}>
             <View style={styles.sectionHeader}>
               <View style={styles.sectionIconSquircle}>
-                <Ionicons name="calendar-outline" size={20} color="#5246e2" />
+                <Ionicons name="calendar-outline" size={20} color="#007aff" />
               </View>
               <View style={styles.sectionHeaderTextCol}>
                 <Text style={styles.sectionTitle}>Date</Text>
@@ -233,7 +233,7 @@ export const CreateTaskScreen: React.FC<CreateTaskScreenProps> = ({
           <View style={styles.sectionCard}>
             <View style={styles.sectionHeader}>
               <View style={styles.sectionIconSquircle}>
-                <Ionicons name="pricetag-outline" size={20} color="#5246e2" />
+                <Ionicons name="pricetag-outline" size={20} color="#007aff" />
               </View>
               <View style={styles.sectionHeaderTextCol}>
                 <Text style={styles.sectionTitle}>Category</Text>

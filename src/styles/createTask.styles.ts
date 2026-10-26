@@ -19,7 +19,7 @@ export const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#f3f0ff',
+    backgroundColor: '#ebf3ff',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -59,7 +59,7 @@ export const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 12,
-    backgroundColor: '#f3f0ff',
+    backgroundColor: '#ebf3ff',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -88,7 +88,7 @@ export const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   titleInputFocused: {
-    borderColor: '#5246e2',
+    borderColor: '#007aff',
     backgroundColor: '#ffffff',
   },
   titleTextInput: {
@@ -124,8 +124,8 @@ export const styles = StyleSheet.create({
     borderColor: '#edf1f7',
   },
   weekdayCardSelected: {
-    backgroundColor: '#f3f0ff',
-    borderColor: '#c7d2fe',
+    backgroundColor: '#ebf3ff',
+    borderColor: '#007aff',
   },
   weekdayText: {
     fontSize: 12,
@@ -136,7 +136,7 @@ export const styles = StyleSheet.create({
     color: '#64748b',
   },
   weekdayTextSelected: {
-    color: '#4338ca',
+    color: '#007aff',
   },
   weekdayCheckbox: {
     width: 20,
@@ -151,7 +151,7 @@ export const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
   },
   weekdayCheckboxSelected: {
-    backgroundColor: '#4338ca',
+    backgroundColor: '#007aff',
   },
   categoriesGrid: {
     flexDirection: 'row',
@@ -190,10 +190,10 @@ export const styles = StyleSheet.create({
   createButton: {
     height: 54,
     borderRadius: 27,
-    backgroundColor: '#4338ca',
+    backgroundColor: '#007aff',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#4338ca',
+    shadowColor: '#007aff',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.3,
     shadowRadius: 12,
