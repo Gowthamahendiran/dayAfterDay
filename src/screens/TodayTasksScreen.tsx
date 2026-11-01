@@ -39,6 +39,8 @@ interface TodayTasksScreenProps {
   user: UserRecord | null;
   onNavigate: (screen: 'tasks' | 'create-task') => void;
   onLogout: () => void;
+  initialTab?: BottomTab;
+  onTabChange?: (tab: BottomTab) => void;
 }
 
 interface LoadErrorState {
@@ -50,6 +52,8 @@ export const TodayTasksScreen: React.FC<TodayTasksScreenProps> = ({
   user,
   onNavigate,
   onLogout,
+  initialTab = 'Tasks',
+  onTabChange,
 }) => {
   // Dynamic today tracking using device local time (YYYY-MM-DD)
   const [currentTodayStr, setCurrentTodayStr] = useState<string>(() =>
@@ -64,9 +68,26 @@ export const TodayTasksScreen: React.FC<TodayTasksScreenProps> = ({
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [loadError, setLoadError] = useState<LoadErrorState | null>(null);
-  const [activeTab, setActiveTab] = useState<BottomTab>('Dashboard');
+  const [activeTab, setActiveTab] = useState<BottomTab>(initialTab);
   const [isProfileModalVisible, setIsProfileModalVisible] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string>('');
+
+  // Synchronize activeTab if initialTab changes (e.g. returning to tasks from CreateTask)
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
+
+  const handleTabPress = useCallback(
+    (tab: BottomTab) => {
+      setActiveTab(tab);
+      if (onTabChange) {
+        onTabChange(tab);
+      }
+    },
+    [onTabChange]
+  );
 
   // 7 days of the selected week (Sunday through Saturday)
   const weekDays: DayDateItem[] = useMemo(
@@ -315,7 +336,7 @@ export const TodayTasksScreen: React.FC<TodayTasksScreenProps> = ({
       {activeTab === 'Dashboard' && (
         <DashboardScreen
           user={user}
-          onNavigateTab={(tab) => setActiveTab(tab)}
+          onNavigateTab={(tab) => handleTabPress(tab)}
           onNavigateCreateTask={() => onNavigate('create-task')}
         />
       )}
@@ -530,7 +551,7 @@ export const TodayTasksScreen: React.FC<TodayTasksScreenProps> = ({
       {/* Bottom Navigation (Dashboard, Tasks, Settings) */}
       <BottomNavigation
         activeTab={activeTab}
-        onTabPress={(tab) => setActiveTab(tab)}
+        onTabPress={(tab) => handleTabPress(tab)}
       />
     </SafeAreaView>
   );

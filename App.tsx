@@ -6,6 +6,7 @@ import { SignupScreen } from './src/screens/SignupScreen';
 import { TodayTasksScreen } from './src/screens/TodayTasksScreen';
 import { CreateTaskScreen } from './src/screens/CreateTaskScreen';
 import { DashboardScreen } from './src/screens/DashboardScreen';
+import { BottomTab } from './src/components/BottomNavigation';
 import {
   waitForAuthReady,
   fetchUserProfile,
@@ -21,6 +22,7 @@ export type Screen = 'login' | 'signup' | 'tasks' | 'create-task' | 'dashboard';
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('login');
   const [currentUser, setCurrentUser] = useState<UserRecord | null>(null);
+  const [tasksTab, setTasksTab] = useState<BottomTab>('Tasks');
   const [isInitializing, setIsInitializing] = useState<boolean>(true);
   const isInitializingRef = useRef<boolean>(false);
 
@@ -175,13 +177,21 @@ export default function App() {
           user={currentUser}
           onNavigate={setCurrentScreen}
           onLogout={handleLogout}
+          initialTab={tasksTab}
+          onTabChange={setTasksTab}
         />
       )}
       {currentScreen === 'create-task' && currentUser && (
         <CreateTaskScreen
           userId={currentUser.userId}
-          onBack={() => setCurrentScreen('tasks')}
-          onSuccess={() => setCurrentScreen('tasks')}
+          onBack={() => {
+            setTasksTab('Tasks');
+            setCurrentScreen('tasks');
+          }}
+          onSuccess={() => {
+            setTasksTab('Tasks');
+            setCurrentScreen('tasks');
+          }}
         />
       )}
       {currentScreen === 'dashboard' && currentUser && (
