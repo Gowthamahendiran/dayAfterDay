@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  BackHandler,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -34,6 +35,18 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
   const [toastMessage, setToastMessage] = useState('');
 
   const [focusedField, setFocusedField] = useState<'username' | 'email' | 'password' | null>(null);
+
+  // Handle Android hardware back press on Signup screen: return to Login
+  useEffect(() => {
+    const handleHardwareBack = () => {
+      onNavigate('login');
+      return true;
+    };
+    const backSub = BackHandler.addEventListener('hardwareBackPress', handleHardwareBack);
+    return () => {
+      backSub.remove();
+    };
+  }, [onNavigate]);
 
   const getFirebaseErrorMessage = (err: any): string => {
     const code = err?.code || '';

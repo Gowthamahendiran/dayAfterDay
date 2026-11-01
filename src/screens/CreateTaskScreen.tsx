@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  BackHandler,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Weekday, TaskCategory } from '../types/task';
@@ -76,6 +77,18 @@ export const CreateTaskScreen: React.FC<CreateTaskScreenProps> = ({
   const [loading, setLoading] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [isTitleFocused, setIsTitleFocused] = useState(false);
+
+  // Handle Android hardware back press on Create Task screen
+  useEffect(() => {
+    const handleHardwareBack = () => {
+      onBack();
+      return true;
+    };
+    const backSub = BackHandler.addEventListener('hardwareBackPress', handleHardwareBack);
+    return () => {
+      backSub.remove();
+    };
+  }, [onBack]);
 
   const toggleDay = (day: Weekday) => {
     setSelectedDays((prev) =>

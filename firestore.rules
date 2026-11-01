@@ -1,0 +1,47 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // User Profile Collection
+    match /userTable/{userId} {
+      allow read, write: if request.auth != null
+                         && request.auth.uid == userId;
+    }
+
+    // Tasks Collection
+    match /tasks/{taskId} {
+
+      // Read and Delete: Only the owner can view or delete their tasks
+      allow read, delete: if request.auth != null
+                          && resource.data.userId == request.auth.uid;
+
+      // Create: Enforce that the creator assigns the task to their own UID
+      allow create: if request.auth != null
+                    && request.resource.data.userId == request.auth.uid;
+
+      // Update: Verify both existing document owner and new document owner
+      // (prevents changing the userId field to transfer ownership)
+      allow update: if request.auth != null
+                    && resource.data.userId == request.auth.uid
+                    && request.resource.data.userId == request.auth.uid;
+    }
+
+    // Task Completions Collection
+    match /taskCompletions/{completionId} {
+
+      // Read and Delete: Only the owner can view or delete their completions
+      allow read, delete: if request.auth != null
+                          && resource.data.userId == request.auth.uid;
+
+      // Create: Enforce that completion is recorded under the user's own UID
+      allow create: if request.auth != null
+                    && request.resource.data.userId == request.auth.uid;
+
+      // Update: Verify both existing owner and updated document owner
+      allow update: if request.auth != null
+                    && resource.data.userId == request.auth.uid
+                    && request.resource.data.userId == request.auth.uid;
+    }
+  }
+}

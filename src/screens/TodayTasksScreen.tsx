@@ -8,6 +8,9 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
+  AppState,
+  AppStateStatus,
+  BackHandler,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { TaskWithCompletion, Weekday, DayDateItem } from '../types/task';
@@ -21,7 +24,6 @@ import {
   getTasksWithCompletions,
   setTaskCompletion,
   deactivateTask,
-  clearInitialSeededTasks,
   getAllActiveTasks,
 } from '../services/taskService';
 import { UserRecord } from '../services/authService';
@@ -29,6 +31,7 @@ import { WeekDateSelector } from '../components/WeekDateSelector';
 import { TaskCard } from '../components/TaskCard';
 import { BottomNavigation, BottomTab } from '../components/BottomNavigation';
 import { ProfileModal } from '../components/ProfileModal';
+import { ExitConfirmationModal } from '../components/ExitConfirmationModal';
 import { Toast } from '../components/Toast';
 import { SettingsScreen } from './SettingsScreen';
 import { DashboardScreen } from './DashboardScreen';
@@ -38,14 +41,26 @@ interface TodayTasksScreenProps {
   user: UserRecord | null;
   onNavigate: (screen: 'tasks' | 'create-task') => void;
   onLogout: () => void;
+  initialTab?: BottomTab;
+  onTabChange?: (tab: BottomTab) => void;
+}
+
+interface LoadErrorState {
+  type: 'permission' | 'network' | 'auth' | 'general';
+  message: string;
 }
 
 export const TodayTasksScreen: React.FC<TodayTasksScreenProps> = ({
   user,
   onNavigate,
   onLogout,
+  initialTab = 'Tasks',
+  onTabChange,
 }) => {
-  const todayStr = useMemo(() => formatLocalDate(new Date()), []);
+  // Dynamic today tracking using device local time (YYYY-MM-DD)
+  const [currentTodayStr, setCurrentTodayStr] = useState<string>(() =>
+    formatLocalDate(new Date())
+  );
   const [selectedDate, setSelectedDate] = useState<string>(() =>
     formatLocalDate(new Date())
   );
@@ -54,40 +69,127 @@ export const TodayTasksScreen: React.FC<TodayTasksScreenProps> = ({
   const [hasAnyTasks, setHasAnyTasks] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<BottomTab>('Dashboard');
+  const [loadError, setLoadError] = useState<LoadErrorState | null>(null);
+  const [activeTab, setActiveTab] = useState<BottomTab>(initialTab);
   const [isProfileModalVisible, setIsProfileModalVisible] = useState<boolean>(false);
+  const [isExitModalVisible, setIsExitModalVisible] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string>('');
+
+  // Synchronize activeTab if initialTab changes (e.g. returning to tasks from CreateTask)
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
+
+  const handleTabPress = useCallback(
+    (tab: BottomTab) => {
+      setActiveTab(tab);
+      if (onTabChange) {
+        onTabChange(tab);
+      }
+    },
+    [onTabChange]
+  );
+
+  // Handle Android hardware back button and system back gesture
+  useEffect(() => {
+    const handleHardwareBack = () => {
+      // 1. If Exit Confirmation Dialog is open, close it
+      if (isExitModalVisible) {
+        setIsExitModalVisible(false);
+        return true;
+      }
+
+      // 2. If Profile Modal is open, close it
+      if (isProfileModalVisible) {
+        setIsProfileModalVisible(false);
+        return true;
+      }
+
+      // 3. If on Tasks tab -> navigate to Dashboard
+      if (activeTab === 'Tasks') {
+        handleTabPress('Dashboard');
+        return true;
+      }
+
+      // 4. If on Settings tab -> navigate to Dashboard
+      if (activeTab === 'Settings') {
+        handleTabPress('Dashboard');
+        return true;
+      }
+
+      // 5. If on Dashboard -> display exit confirmation dialog
+      if (activeTab === 'Dashboard') {
+        setIsExitModalVisible(true);
+        return true;
+      }
+
+      return false;
+    };
+
+    const backSubscription = BackHandler.addEventListener(
+      'hardwareBackPress',
+      handleHardwareBack
+    );
+
+    return () => {
+      backSubscription.remove();
+    };
+  }, [activeTab, isProfileModalVisible, isExitModalVisible, handleTabPress]);
 
   // 7 days of the selected week (Sunday through Saturday)
   const weekDays: DayDateItem[] = useMemo(
     () => getWeekDays(new Date(), weekOffset),
-    [weekOffset]
+    [weekOffset, currentTodayStr]
   );
 
-  // Compute uppercase Weekday (SUN..SAT) from selectedDate YYYY-MM-DD
+  // Compute uppercase Weekday (SUN..SAT) from selectedDate YYYY-MM-DD using local noon to avoid DST shift
   const selectedWeekday: Weekday = useMemo(() => {
     try {
       const [year, month, day] = selectedDate.split('-').map(Number);
-      const dateObj = new Date(year, month - 1, day);
+      const dateObj = new Date(year, month - 1, day, 12, 0, 0);
       return getWeekdayFromDate(dateObj);
     } catch {
       return getWeekdayFromDate(new Date());
     }
   }, [selectedDate]);
 
+  // Synchronize dynamic today date across midnight and background/foreground transitions
+  const checkDateRollOver = useCallback(() => {
+    const realToday = formatLocalDate(new Date());
+    setCurrentTodayStr((prevToday) => {
+      if (realToday !== prevToday) {
+        console.log(`[TodayTasksScreen] Date roll-over detected: was ${prevToday}, now ${realToday}`);
+        // If user was viewing previous today, advance to new today automatically
+        setSelectedDate((prevSelected) => {
+          if (prevSelected === prevToday) {
+            return realToday;
+          }
+          return prevSelected;
+        });
+        return realToday;
+      }
+      return prevToday;
+    });
+  }, []);
+
   // Load tasks for the selected date and weekday
   const loadTasks = useCallback(
     async (showLoadingSpinner = true) => {
-      if (!user?.userId) return;
+      if (!user?.userId) {
+        console.warn('[TodayTasksScreen] Cannot load tasks: user ID missing');
+        return;
+      }
 
       if (showLoadingSpinner) {
         setLoading(true);
       }
+      setLoadError(null);
+
+      console.log(`[TodayTasksScreen] Fetching tasks: UID=${user.userId}, date=${selectedDate}, weekday=${selectedWeekday}`);
 
       try {
-        // Clear any sample/mock tasks so the list starts clean
-        await clearInitialSeededTasks(user.userId);
-
         const [allUserTasks, loadedTasks] = await Promise.all([
           getAllActiveTasks(user.userId),
           getTasksWithCompletions(
@@ -96,11 +198,34 @@ export const TodayTasksScreen: React.FC<TodayTasksScreenProps> = ({
             selectedDate
           ),
         ]);
+
+        console.log(`[TodayTasksScreen] Successfully loaded ${loadedTasks.length} tasks for ${selectedDate}. Total user active: ${allUserTasks.length}`);
+
         setHasAnyTasks(allUserTasks.length > 0);
         setTasks(loadedTasks);
+        setLoadError(null);
       } catch (err: any) {
-        console.error('Error loading tasks:', err);
-        setToastMessage(err?.message || 'Failed to load tasks. Please try again.');
+        console.error('[TodayTasksScreen] Failed to load tasks:', err);
+
+        const errMsg: string = err?.message || String(err);
+        const errCode: string = err?.code || '';
+
+        let errType: LoadErrorState['type'] = 'general';
+        let displayMsg = 'Failed to load tasks. Please try again.';
+
+        if (errCode === 'permission-denied' || errMsg.toLowerCase().includes('permission')) {
+          errType = 'permission';
+          displayMsg = 'Missing or insufficient permissions. Please verify your authentication session.';
+        } else if (errCode === 'unavailable' || errMsg.toLowerCase().includes('network') || errMsg.toLowerCase().includes('offline')) {
+          errType = 'network';
+          displayMsg = 'Network connectivity issue. Please check your internet connection.';
+        } else if (errMsg.toLowerCase().includes('auth') || errMsg.toLowerCase().includes('authenticated')) {
+          errType = 'auth';
+          displayMsg = 'Authentication session expired. Please sign in again.';
+        }
+
+        setLoadError({ type: errType, message: displayMsg });
+        setToastMessage(displayMsg);
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -109,14 +234,39 @@ export const TodayTasksScreen: React.FC<TodayTasksScreenProps> = ({
     [user?.userId, selectedWeekday, selectedDate]
   );
 
+  // Initial load and whenever selected date/weekday changes
   useEffect(() => {
     loadTasks(true);
   }, [loadTasks]);
 
+  // Mobile AppState & Lifecycle handling: refresh on foreground and detect date roll-overs
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      console.log(`[TodayTasksScreen] Mobile AppState changed to: ${nextAppState}`);
+      if (nextAppState === 'active') {
+        checkDateRollOver();
+        loadTasks(false);
+      }
+    };
+
+    const sub = AppState.addEventListener('change', handleAppStateChange);
+
+    // Periodic check (every 30s) for date roll-over while app stays open
+    const interval = setInterval(() => {
+      checkDateRollOver();
+    }, 30000);
+
+    return () => {
+      sub.remove();
+      clearInterval(interval);
+    };
+  }, [checkDateRollOver, loadTasks]);
+
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
+    checkDateRollOver();
     loadTasks(false);
-  }, [loadTasks]);
+  }, [checkDateRollOver, loadTasks]);
 
   // Toggle completion with optimistic UI update - ONLY allowed on today!
   const handleToggleCompletion = async (
@@ -126,8 +276,8 @@ export const TodayTasksScreen: React.FC<TodayTasksScreenProps> = ({
     if (!user?.userId) return;
 
     // Enforce that only today's tasks can be completed or modified
-    if (selectedDate !== todayStr) {
-      if (selectedDate < todayStr) {
+    if (selectedDate !== currentTodayStr) {
+      if (selectedDate < currentTodayStr) {
         setToastMessage('Past tasks are read-only and cannot be modified.');
       } else {
         setToastMessage('Future tasks can only be completed on their scheduled day.');
@@ -146,8 +296,8 @@ export const TodayTasksScreen: React.FC<TodayTasksScreenProps> = ({
     try {
       await setTaskCompletion(user.userId, taskId, selectedDate, newCompleted);
     } catch (err: any) {
-      console.error('Error toggling task completion:', err);
-      // Revert on failure
+      console.error('[TodayTasksScreen] Error toggling task completion:', err);
+      // Revert optimistic update on failure
       setTasks((prev) =>
         prev.map((t) =>
           t.id === taskId ? { ...t, completed: currentCompleted } : t
@@ -161,7 +311,7 @@ export const TodayTasksScreen: React.FC<TodayTasksScreenProps> = ({
   const handleDeleteTask = (taskId: string) => {
     if (!user?.userId) return;
 
-    if (selectedDate !== todayStr) {
+    if (selectedDate !== currentTodayStr) {
       setToastMessage('Past or future tasks cannot be deleted.');
       return;
     }
@@ -185,7 +335,7 @@ export const TodayTasksScreen: React.FC<TodayTasksScreenProps> = ({
               const remaining = await getAllActiveTasks(user.userId);
               setHasAnyTasks(remaining.length > 0);
             } catch (err: any) {
-              console.error('Error deactivating task:', err);
+              console.error('[TodayTasksScreen] Error deactivating task:', err);
               setToastMessage('Failed to delete task. Please try again.');
               loadTasks(false);
             }
@@ -204,8 +354,10 @@ export const TodayTasksScreen: React.FC<TodayTasksScreenProps> = ({
   };
 
   const handleResetToday = () => {
+    const realToday = formatLocalDate(new Date());
+    setCurrentTodayStr(realToday);
     setWeekOffset(0);
-    setSelectedDate(todayStr);
+    setSelectedDate(realToday);
   };
 
   // Progress metrics
@@ -229,11 +381,17 @@ export const TodayTasksScreen: React.FC<TodayTasksScreenProps> = ({
         onLogout={onLogout}
       />
 
+      <ExitConfirmationModal
+        visible={isExitModalVisible}
+        onCancel={() => setIsExitModalVisible(false)}
+        onConfirmExit={() => BackHandler.exitApp()}
+      />
+
       {/* Dashboard Screen */}
       {activeTab === 'Dashboard' && (
         <DashboardScreen
           user={user}
-          onNavigateTab={(tab) => setActiveTab(tab)}
+          onNavigateTab={(tab) => handleTabPress(tab)}
           onNavigateCreateTask={() => onNavigate('create-task')}
         />
       )}
@@ -248,18 +406,21 @@ export const TodayTasksScreen: React.FC<TodayTasksScreenProps> = ({
               <Text style={styles.headerTitle}>Tasks</Text>
             </View>
 
-            {/* 7-day Weekly Date Selector (with Week Switcher Row above dates) */}
+            {/* 7-day Weekly Date Selector */}
             <WeekDateSelector
               days={weekDays}
               selectedDate={selectedDate}
-              onSelectDate={(newDate) => setSelectedDate(newDate)}
+              onSelectDate={(newDate) => {
+                setSelectedDate(newDate);
+                setLoadError(null);
+              }}
               weekOffset={weekOffset}
               onPrevWeek={handlePrevWeek}
               onNextWeek={handleNextWeek}
               onResetToday={handleResetToday}
             />
 
-            {/* Progress Card: "0 of 1 completed" + "0%" + Horizontal Progress Bar */}
+            {/* Progress Card: "X of Y completed" + "%" + Horizontal Progress Bar */}
             <View style={styles.progressCard}>
               <View style={styles.progressTextRow}>
                 <Text style={styles.progressCountText}>
@@ -285,6 +446,53 @@ export const TodayTasksScreen: React.FC<TodayTasksScreenProps> = ({
                 <ActivityIndicator size="large" color="#007aff" />
                 <Text style={styles.loadingText}>Loading your daily tasks...</Text>
               </View>
+            ) : loadError && tasks.length === 0 ? (
+              /* Error State: Differentiated error view with Retry mechanism */
+              <ScrollView
+                contentContainerStyle={styles.scrollContent}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={handleRefresh}
+                    colors={['#007aff']}
+                    tintColor="#007aff"
+                  />
+                }
+              >
+                <View style={styles.errorContainer}>
+                  <View style={styles.errorIconCircle}>
+                    <Ionicons
+                      name={
+                        loadError.type === 'network'
+                          ? 'cloud-offline-outline'
+                          : loadError.type === 'permission'
+                          ? 'lock-closed-outline'
+                          : 'alert-circle-outline'
+                      }
+                      size={32}
+                      color="#ef4444"
+                    />
+                  </View>
+                  <Text style={styles.errorTitle}>
+                    {loadError.type === 'network'
+                      ? 'Connection Problem'
+                      : loadError.type === 'permission'
+                      ? 'Permission Required'
+                      : loadError.type === 'auth'
+                      ? 'Session Expired'
+                      : 'Unable to Load Tasks'}
+                  </Text>
+                  <Text style={styles.errorMessage}>{loadError.message}</Text>
+                  <TouchableOpacity
+                    style={styles.retryButton}
+                    onPress={() => loadTasks(true)}
+                    activeOpacity={0.85}
+                  >
+                    <Ionicons name="reload" size={16} color="#ffffff" style={{ marginRight: 6 }} />
+                    <Text style={styles.retryButtonText}>Try Again</Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
             ) : (
               <ScrollView
                 contentContainerStyle={styles.scrollContent}
@@ -303,16 +511,16 @@ export const TodayTasksScreen: React.FC<TodayTasksScreenProps> = ({
                     <TaskCard
                       key={task.id}
                       task={task}
-                      isToday={selectedDate === todayStr}
-                      isPast={selectedDate < todayStr}
-                      isFuture={selectedDate > todayStr}
+                      isToday={selectedDate === currentTodayStr}
+                      isPast={selectedDate < currentTodayStr}
+                      isFuture={selectedDate > currentTodayStr}
                       onToggle={handleToggleCompletion}
                       onLongPress={handleDeleteTask}
                     />
                   ))
                 ) : (
                   <View style={styles.emptyContainer}>
-                    {selectedDate < todayStr ? (
+                    {selectedDate < currentTodayStr ? (
                       // Past Day Empty State
                       <>
                         <View style={[styles.emptyIconCircle, { backgroundColor: '#f1f5f9' }]}>
@@ -329,7 +537,7 @@ export const TodayTasksScreen: React.FC<TodayTasksScreenProps> = ({
                           <Text style={styles.createTaskEmptyBtnText}>Jump to Today</Text>
                         </TouchableOpacity>
                       </>
-                    ) : selectedDate > todayStr ? (
+                    ) : selectedDate > currentTodayStr ? (
                       // Future Day Empty State
                       <>
                         <View style={[styles.emptyIconCircle, { backgroundColor: '#ede9fe' }]}>
@@ -349,7 +557,7 @@ export const TodayTasksScreen: React.FC<TodayTasksScreenProps> = ({
                         </TouchableOpacity>
                       </>
                     ) : (
-                      // Today Empty State
+                      // Today Empty State (only displayed when request succeeded and list is genuinely empty)
                       <>
                         <View style={styles.emptyIconCircle}>
                           <Ionicons name="checkbox-outline" size={32} color="#5246e2" />
@@ -374,7 +582,7 @@ export const TodayTasksScreen: React.FC<TodayTasksScreenProps> = ({
             )}
           </View>
 
-          {/* Floating Circle + Button (above bottom nav, bottom right) */}
+          {/* Floating Circle + Button */}
           <TouchableOpacity
             style={styles.fabButton}
             onPress={() => onNavigate('create-task')}
@@ -395,12 +603,10 @@ export const TodayTasksScreen: React.FC<TodayTasksScreenProps> = ({
         />
       )}
 
-
-
-      {/* Bottom Navigation (Tasks, Progress, Calendar, Settings) */}
+      {/* Bottom Navigation (Dashboard, Tasks, Settings) */}
       <BottomNavigation
         activeTab={activeTab}
-        onTabPress={(tab) => setActiveTab(tab)}
+        onTabPress={(tab) => handleTabPress(tab)}
       />
     </SafeAreaView>
   );
