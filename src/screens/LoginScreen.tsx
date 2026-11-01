@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,11 +11,13 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
+  BackHandler,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { loginUser, UserRecord } from '../services/authService';
 import { Toast } from '../components/Toast';
+import { ExitConfirmationModal } from '../components/ExitConfirmationModal';
 import { styles } from '../styles/login.styles';
 
 interface LoginScreenProps {
@@ -32,8 +34,25 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
+  const [isExitModalVisible, setIsExitModalVisible] = useState(false);
 
   const [focusedField, setFocusedField] = useState<'identifier' | 'password' | null>(null);
+
+  // Handle Android hardware back press on Login screen: show exit confirmation dialog
+  useEffect(() => {
+    const handleHardwareBack = () => {
+      if (isExitModalVisible) {
+        setIsExitModalVisible(false);
+        return true;
+      }
+      setIsExitModalVisible(true);
+      return true;
+    };
+    const backSub = BackHandler.addEventListener('hardwareBackPress', handleHardwareBack);
+    return () => {
+      backSub.remove();
+    };
+  }, [isExitModalVisible]);
 
   const getFirebaseErrorMessage = (err: any): string => {
     const code = err?.code || '';
@@ -103,6 +122,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         message={toastMessage}
         type="error"
         onDismiss={() => setToastMessage('')}
+      />
+
+      {/* Android Exit Confirmation Dialog */}
+      <ExitConfirmationModal
+        visible={isExitModalVisible}
+        onCancel={() => setIsExitModalVisible(false)}
+        onConfirmExit={() => BackHandler.exitApp()}
       />
 
       {/* Ambient background pastel glows */}

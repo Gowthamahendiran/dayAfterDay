@@ -10,6 +10,7 @@ import {
   Alert,
   AppState,
   AppStateStatus,
+  BackHandler,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { TaskWithCompletion, Weekday, DayDateItem } from '../types/task';
@@ -30,6 +31,7 @@ import { WeekDateSelector } from '../components/WeekDateSelector';
 import { TaskCard } from '../components/TaskCard';
 import { BottomNavigation, BottomTab } from '../components/BottomNavigation';
 import { ProfileModal } from '../components/ProfileModal';
+import { ExitConfirmationModal } from '../components/ExitConfirmationModal';
 import { Toast } from '../components/Toast';
 import { SettingsScreen } from './SettingsScreen';
 import { DashboardScreen } from './DashboardScreen';
@@ -70,6 +72,7 @@ export const TodayTasksScreen: React.FC<TodayTasksScreenProps> = ({
   const [loadError, setLoadError] = useState<LoadErrorState | null>(null);
   const [activeTab, setActiveTab] = useState<BottomTab>(initialTab);
   const [isProfileModalVisible, setIsProfileModalVisible] = useState<boolean>(false);
+  const [isExitModalVisible, setIsExitModalVisible] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string>('');
 
   // Synchronize activeTab if initialTab changes (e.g. returning to tasks from CreateTask)
@@ -88,6 +91,52 @@ export const TodayTasksScreen: React.FC<TodayTasksScreenProps> = ({
     },
     [onTabChange]
   );
+
+  // Handle Android hardware back button and system back gesture
+  useEffect(() => {
+    const handleHardwareBack = () => {
+      // 1. If Exit Confirmation Dialog is open, close it
+      if (isExitModalVisible) {
+        setIsExitModalVisible(false);
+        return true;
+      }
+
+      // 2. If Profile Modal is open, close it
+      if (isProfileModalVisible) {
+        setIsProfileModalVisible(false);
+        return true;
+      }
+
+      // 3. If on Tasks tab -> navigate to Dashboard
+      if (activeTab === 'Tasks') {
+        handleTabPress('Dashboard');
+        return true;
+      }
+
+      // 4. If on Settings tab -> navigate to Dashboard
+      if (activeTab === 'Settings') {
+        handleTabPress('Dashboard');
+        return true;
+      }
+
+      // 5. If on Dashboard -> display exit confirmation dialog
+      if (activeTab === 'Dashboard') {
+        setIsExitModalVisible(true);
+        return true;
+      }
+
+      return false;
+    };
+
+    const backSubscription = BackHandler.addEventListener(
+      'hardwareBackPress',
+      handleHardwareBack
+    );
+
+    return () => {
+      backSubscription.remove();
+    };
+  }, [activeTab, isProfileModalVisible, isExitModalVisible, handleTabPress]);
 
   // 7 days of the selected week (Sunday through Saturday)
   const weekDays: DayDateItem[] = useMemo(
@@ -330,6 +379,12 @@ export const TodayTasksScreen: React.FC<TodayTasksScreenProps> = ({
         user={user}
         onClose={() => setIsProfileModalVisible(false)}
         onLogout={onLogout}
+      />
+
+      <ExitConfirmationModal
+        visible={isExitModalVisible}
+        onCancel={() => setIsExitModalVisible(false)}
+        onConfirmExit={() => BackHandler.exitApp()}
       />
 
       {/* Dashboard Screen */}
