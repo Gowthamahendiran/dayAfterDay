@@ -5,6 +5,8 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  AppState,
+  AppStateStatus,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { UserRecord } from '../services/authService';
@@ -39,17 +41,26 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         const todayStr = formatLocalDate(new Date());
         const weekday = getWeekdayFromDate(new Date());
         const tasks = await getTasksWithCompletions(user.userId, weekday, todayStr);
-        if (isMounted && tasks && tasks.length > 0) {
+        if (isMounted && tasks) {
           setRealTasks(tasks);
         }
-      } catch (err) {
-        console.warn('Dashboard tasks load note:', err);
+      } catch (err: any) {
+        console.warn('[DashboardScreen] Dashboard tasks load note:', err?.message || err);
       }
     };
 
     fetchUserTasks();
+
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active') {
+        fetchUserTasks();
+      }
+    };
+    const sub = AppState.addEventListener('change', handleAppStateChange);
+
     return () => {
       isMounted = false;
+      sub.remove();
     };
   }, [user?.userId]);
 

@@ -2,7 +2,6 @@ import {
   collection,
   doc,
   setDoc,
-  getDoc,
   getDocs,
   deleteDoc,
   query,
@@ -10,12 +9,32 @@ import {
   serverTimestamp,
   updateDoc,
 } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { db, auth } from '../config/firebase';
 import { Task, TaskCategory, Weekday, TaskWithCompletion } from '../types/task';
 import { formatLocalDate } from '../utils/dateUtils';
 
 const TASKS_COLLECTION = 'tasks';
 const COMPLETIONS_COLLECTION = 'taskCompletions';
+
+/**
+ * Validates that Firebase Auth has confirmed the user's session before querying Firestore.
+ * Returns the guaranteed, authenticated user's UID (auth.currentUser.uid).
+ */
+function assertAuthenticatedUser(userId: string): string {
+  if (!userId) {
+    throw new Error('User ID is required to execute task operations.');
+  }
+  const currentAuth = auth.currentUser;
+  if (!currentAuth) {
+    console.warn('[taskService] Assertion failed: auth.currentUser is null. Cannot query Firestore.');
+    throw new Error('Missing or insufficient permissions: User is not authenticated.');
+  }
+  if (currentAuth.uid !== userId) {
+    console.warn(`[taskService] Assertion failed: UID mismatch. auth.currentUser.uid=${currentAuth.uid}, requested userId=${userId}`);
+    throw new Error('Missing or insufficient permissions: User ID mismatch.');
+  }
+  return currentAuth.uid;
+}
 
 /**
  * Creates a new recurring task in Firestore
@@ -26,7 +45,7 @@ export async function createTask(
   daysOfWeek: Weekday[],
   category: TaskCategory
 ): Promise<Task> {
-  if (!userId) throw new Error('User authentication is required to create a task.');
+  const authUid = assertAuthenticatedUser(userId);
 
   const trimmedTitle = title.trim();
   if (!trimmedTitle) throw new Error('Task title cannot be empty.');
@@ -39,7 +58,7 @@ export async function createTask(
   const newDocRef = doc(tasksRef);
 
   const taskData = {
-    userId,
+    userId: authUid,
     title: trimmedTitle,
     daysOfWeek,
     category,
@@ -49,7 +68,9 @@ export async function createTask(
     updatedAt: serverTimestamp(),
   };
 
+  console.log(`[taskService] Creating new task for UID ${authUid}: "${trimmedTitle}" with days: [${daysOfWeek.join(', ')}]`);
   await setDoc(newDocRef, taskData);
+  console.log(`[taskService] Task created successfully with ID: ${newDocRef.id}`);
 
   return {
     id: newDocRef.id,
@@ -65,12 +86,13 @@ export async function getTasksForWeekday(
   weekday: Weekday,
   dateStr?: string
 ): Promise<Task[]> {
-  if (!userId) return [];
+  const authUid = assertAuthenticatedUser(userId);
 
+  console.log(`[taskService] Querying tasks for UID: ${authUid}, weekday: ${weekday}, date: ${dateStr || 'N/A'}`);
   const tasksRef = collection(db, TASKS_COLLECTION);
   const q = query(
     tasksRef,
-    where('userId', '==', userId),
+    where('userId', '==', authUid),
     where('daysOfWeek', 'array-contains', weekday)
   );
 
@@ -94,7 +116,7 @@ export async function getTasksForWeekday(
       }
 
       // If viewing a past date prior to task creation, do not show the task
-      if (dateStr && dateStr < taskStartDate) {
+      if (dateStr && taskStartDate && dateStr < taskStartDate) {
         return;
       }
 
@@ -112,6 +134,7 @@ export async function getTasksForWeekday(
     }
   });
 
+  console.log(`[taskService] Returned ${tasks.length} active tasks for weekday ${weekday}`);
   return tasks;
 }
 
@@ -119,10 +142,11 @@ export async function getTasksForWeekday(
  * Fetches all active tasks owned by a user across all days
  */
 export async function getAllActiveTasks(userId: string): Promise<Task[]> {
-  if (!userId) return [];
+  const authUid = assertAuthenticatedUser(userId);
 
+  console.log(`[taskService] Querying all active tasks for UID: ${authUid}`);
   const tasksRef = collection(db, TASKS_COLLECTION);
-  const q = query(tasksRef, where('userId', '==', userId));
+  const q = query(tasksRef, where('userId', '==', authUid));
 
   const querySnapshot = await getDocs(q);
   const tasks: Task[] = [];
@@ -137,12 +161,14 @@ export async function getAllActiveTasks(userId: string): Promise<Task[]> {
         daysOfWeek: data.daysOfWeek || [],
         category: data.category,
         isActive: data.isActive ?? true,
+        startDate: data.startDate || '2000-01-01',
         createdAt: data.createdAt,
         updatedAt: data.updatedAt,
       });
     }
   });
 
+  console.log(`[taskService] Total active tasks for user: ${tasks.length}`);
   return tasks;
 }
 
@@ -153,12 +179,12 @@ export async function getCompletionsForDate(
   userId: string,
   date: string
 ): Promise<Record<string, boolean>> {
-  if (!userId || !date) return {};
+  const authUid = assertAuthenticatedUser(userId);
 
   const completionsRef = collection(db, COMPLETIONS_COLLECTION);
   const q = query(
     completionsRef,
-    where('userId', '==', userId),
+    where('userId', '==', authUid),
     where('date', '==', date)
   );
 
@@ -172,6 +198,7 @@ export async function getCompletionsForDate(
     }
   });
 
+  console.log(`[taskService] Retrieved ${Object.keys(completionMap).length} completion records for date ${date}`);
   return completionMap;
 }
 
@@ -185,13 +212,14 @@ export async function setTaskCompletion(
   date: string,
   completed: boolean
 ): Promise<void> {
-  if (!userId || !taskId || !date) return;
+  const authUid = assertAuthenticatedUser(userId);
 
   const docId = `${taskId}_${date}`;
   const docRef = doc(db, COMPLETIONS_COLLECTION, docId);
 
+  console.log(`[taskService] Persisting task completion: docId=${docId}, completed=${completed}`);
   await setDoc(docRef, {
-    userId,
+    userId: authUid,
     taskId,
     date,
     completed,
@@ -203,7 +231,9 @@ export async function setTaskCompletion(
  * Soft deletes an active task by marking isActive = false
  */
 export async function deactivateTask(userId: string, taskId: string): Promise<void> {
-  if (!userId || !taskId) return;
+  assertAuthenticatedUser(userId);
+
+  console.log(`[taskService] Deactivating task ${taskId} for UID ${userId}`);
   const docRef = doc(db, TASKS_COLLECTION, taskId);
   await updateDoc(docRef, {
     isActive: false,
@@ -231,36 +261,32 @@ export async function getTasksWithCompletions(
 }
 
 /**
- * Clears previously seeded sample tasks if present for this user
+ * Clears previously seeded sample tasks if specifically requested.
+ * Safe guard: does NOT delete user tasks during regular app usage.
  */
 export async function clearInitialSeededTasks(userId: string): Promise<void> {
   if (!userId) return;
-
   try {
-    const tasksRef = collection(db, TASKS_COLLECTION);
-    const q = query(tasksRef, where('userId', '==', userId));
-    const snapshot = await getDocs(q);
+    const authUid = assertAuthenticatedUser(userId);
 
-    const SEEDED_TITLES = [
-      'Morning Workout',
-      'Read a Book',
-      'Drink Water',
-      'Work on Project',
-      'Plan Tomorrow',
-    ];
+    const tasksRef = collection(db, TASKS_COLLECTION);
+    const q = query(tasksRef, where('userId', '==', authUid));
+    const snapshot = await getDocs(q);
 
     const deletePromises: Promise<void>[] = [];
     snapshot.forEach((docSnap) => {
       const data = docSnap.data();
-      if (SEEDED_TITLES.includes(data.title)) {
+      // Only delete if specifically tagged as seeded
+      if (data.isSeeded === true) {
         deletePromises.push(deleteDoc(doc(db, TASKS_COLLECTION, docSnap.id)));
       }
     });
 
     if (deletePromises.length > 0) {
       await Promise.all(deletePromises);
+      console.log(`[taskService] Cleaned up ${deletePromises.length} seeded tasks`);
     }
   } catch (err) {
-    console.warn('Note on clearing seeded tasks:', err);
+    console.warn('[taskService] Note on clearInitialSeededTasks:', err);
   }
 }

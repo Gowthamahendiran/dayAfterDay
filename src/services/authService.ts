@@ -20,12 +20,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth, db } from '../config/firebase';
 
 const USER_SESSION_KEY = '@dayafterday_user_session';
-const USER_CREDS_KEY = '@dayafterday_user_creds';
-
-export interface UserCredentials {
-  identifier: string;
-  pass: string;
-}
+const LEGACY_CREDS_KEY = '@dayafterday_user_creds';
 
 export interface UserRecord {
   userId: string;
@@ -36,7 +31,147 @@ export interface UserRecord {
 }
 
 /**
- * Sign up a new user with Firebase Auth and save their record in 'userTable' Firestore collection
+ * Remove legacy stored credentials to ensure raw passwords are never stored locally.
+ */
+export async function cleanupLegacyCredentials(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(LEGACY_CREDS_KEY);
+    if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
+      localStorage.removeItem(LEGACY_CREDS_KEY);
+    }
+  } catch (err) {
+    console.warn('[Auth] Note cleaning legacy credentials:', err);
+  }
+}
+
+/**
+ * Wait for Firebase Auth to finish checking and restoring the persisted session.
+ * Resolves to the confirmed FirebaseUser if an active session exists, or null.
+ */
+export async function waitForAuthReady(): Promise<FirebaseUser | null> {
+  try {
+    if (typeof auth.authStateReady === 'function') {
+      await auth.authStateReady();
+    }
+    const current = auth.currentUser;
+    console.log('[Auth] waitForAuthReady completed. Authenticated UID:', current ? current.uid : 'None');
+    return current;
+  } catch (err) {
+    console.warn('[Auth] authStateReady error:', err);
+    return auth.currentUser;
+  }
+}
+
+/**
+ * Returns the currently authenticated user's UID directly from Firebase Auth.
+ */
+export function getCurrentAuthenticatedUid(): string | null {
+  return auth.currentUser ? auth.currentUser.uid : null;
+}
+
+/**
+ * Retrieve cached user from local storage (AsyncStorage + localStorage fallback).
+ * If expectedUid is passed, verifies that the cached data belongs strictly to this user.
+ */
+export async function getCachedUser(expectedUid?: string): Promise<UserRecord | null> {
+  try {
+    let raw = await AsyncStorage.getItem(USER_SESSION_KEY);
+    if (!raw && Platform.OS === 'web' && typeof localStorage !== 'undefined') {
+      raw = localStorage.getItem(USER_SESSION_KEY);
+    }
+    if (raw) {
+      const parsed = JSON.parse(raw) as UserRecord;
+      if (expectedUid && parsed.userId !== expectedUid) {
+        console.warn(`[Auth] Cached user UID mismatch (expected ${expectedUid}, found ${parsed.userId}). Rejecting cache.`);
+        return null;
+      }
+      return parsed;
+    }
+  } catch (err) {
+    console.warn('[Auth] Error reading cached user session:', err);
+  }
+  return null;
+}
+
+/**
+ * Save user profile record to persistent local storage for fast display / offline support.
+ * (Note: Never saves passwords or raw credentials).
+ */
+export async function saveUserSession(userRecord: UserRecord): Promise<void> {
+  try {
+    const json = JSON.stringify(userRecord);
+    await AsyncStorage.setItem(USER_SESSION_KEY, json);
+    if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
+      localStorage.setItem(USER_SESSION_KEY, json);
+    }
+  } catch (err) {
+    console.warn('[Auth] Error saving user session:', err);
+  }
+}
+
+/**
+ * Sign out and clear stored session and legacy credentials.
+ */
+export async function clearUserSession(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(USER_SESSION_KEY);
+    await AsyncStorage.removeItem(LEGACY_CREDS_KEY);
+    if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
+      localStorage.removeItem(USER_SESSION_KEY);
+      localStorage.removeItem(LEGACY_CREDS_KEY);
+    }
+  } catch (err) {
+    console.warn('[Auth] Error clearing cached session:', err);
+  }
+}
+
+/**
+ * Fetches user profile from Firestore 'userTable', with fallback to cached session or Auth profile.
+ */
+export async function fetchUserProfile(firebaseUser: FirebaseUser): Promise<UserRecord> {
+  const uid = firebaseUser.uid;
+  console.log('[Auth] Fetching user profile from Firestore userTable for UID:', uid);
+
+  try {
+    const userDocRef = doc(db, 'userTable', uid);
+    const userDoc = await getDoc(userDocRef);
+    if (userDoc.exists()) {
+      const data = userDoc.data() as UserRecord;
+      await saveUserSession(data);
+      return data;
+    }
+  } catch (err) {
+    console.warn('[Auth] Failed to fetch userTable doc from Firestore:', err);
+  }
+
+  // Fallback to locally cached user if matching UID
+  const cached = await getCachedUser(uid);
+  if (cached) {
+    return cached;
+  }
+
+  // Construct fallback from Firebase Auth profile
+  const timestamp = new Date().toISOString();
+  const fallback: UserRecord = {
+    userId: uid,
+    name: firebaseUser.displayName || (firebaseUser.email ? firebaseUser.email.split('@')[0] : 'User'),
+    email: firebaseUser.email || '',
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+
+  try {
+    await setDoc(doc(db, 'userTable', uid), fallback);
+  } catch (err) {
+    console.warn('[Auth] Note writing fallback to userTable:', err);
+  }
+
+  await saveUserSession(fallback);
+  return fallback;
+}
+
+/**
+ * Sign up a new user with Firebase Auth and save their record in 'userTable' Firestore collection.
  */
 export async function signUpUser(
   name: string,
@@ -46,6 +181,8 @@ export async function signUpUser(
   const trimmedName = name.trim();
   const trimmedEmail = email.trim().toLowerCase();
 
+  console.log('[Auth] Creating new account for:', trimmedEmail);
+
   // 1. Create account with Firebase Authentication
   const userCredential = await createUserWithEmailAndPassword(auth, trimmedEmail, pass);
   const firebaseUser = userCredential.user;
@@ -54,7 +191,7 @@ export async function signUpUser(
   try {
     await updateProfile(firebaseUser, { displayName: trimmedName });
   } catch (err) {
-    console.warn('Failed to update displayName:', err);
+    console.warn('[Auth] Failed to update displayName:', err);
   }
 
   // 3. Create document in userTable collection with required schema
@@ -71,23 +208,26 @@ export async function signUpUser(
     const userDocRef = doc(db, 'userTable', firebaseUser.uid);
     await setDoc(userDocRef, userRecord);
   } catch (err) {
-    console.warn('Failed to write to userTable collection in Firestore:', err);
+    console.warn('[Auth] Failed to write to userTable collection in Firestore:', err);
   }
 
-  // 4. Save session and credentials to local storage (app level & browser level)
-  await saveUserSession(userRecord, { identifier: trimmedEmail, pass });
+  // 4. Save session to local storage (no passwords)
+  await saveUserSession(userRecord);
 
+  console.log('[Auth] Sign up successful. User UID:', firebaseUser.uid);
   return userRecord;
 }
 
 /**
- * Log in an existing user with email or username and password
+ * Log in an existing user with email or username and password.
  */
 export async function loginUser(
   identifier: string,
   pass: string
 ): Promise<UserRecord> {
   let targetEmail = identifier.trim().toLowerCase();
+
+  console.log('[Auth] Attempting login for:', targetEmail);
 
   // If user entered a username instead of an email, look up their email in userTable
   if (!targetEmail.includes('@')) {
@@ -100,175 +240,67 @@ export async function loginUser(
       if (!querySnapshot.empty) {
         const foundData = querySnapshot.docs[0].data() as UserRecord;
         if (foundData.email) {
-          targetEmail = foundData.email;
+          targetEmail = foundData.email.toLowerCase();
+          console.log('[Auth] Resolved username to email:', targetEmail);
         }
       }
     } catch (err) {
-      console.warn('Username query lookup note:', err);
+      console.warn('[Auth] Username lookup note:', err);
     }
   }
 
-  // 1. Sign in with Firebase Auth
+  // 1. Sign in with Firebase Auth (session persistence is handled automatically by SDK)
   const userCredential = await signInWithEmailAndPassword(auth, targetEmail, pass);
   const firebaseUser = userCredential.user;
 
-  // 2. Fetch user details from userTable collection
-  let userRecord: UserRecord | null = null;
-  try {
-    const userDocRef = doc(db, 'userTable', firebaseUser.uid);
-    const userDoc = await getDoc(userDocRef);
-    if (userDoc.exists()) {
-      userRecord = userDoc.data() as UserRecord;
-    }
-  } catch (err) {
-    console.warn('Failed to fetch from userTable:', err);
-  }
+  console.log('[Auth] Firebase Auth sign-in successful. UID:', firebaseUser.uid);
 
-  // Fallback if document does not exist yet
-  if (!userRecord) {
-    const timestamp = new Date().toISOString();
-    userRecord = {
-      userId: firebaseUser.uid,
-      name: firebaseUser.displayName || targetEmail.split('@')[0],
-      email: firebaseUser.email || targetEmail,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    };
-    try {
-      await setDoc(doc(db, 'userTable', firebaseUser.uid), userRecord);
-    } catch {
-      // Ignore
-    }
-  }
-
-  // 3. Save session and credentials to local storage (app level & browser level)
-  await saveUserSession(userRecord, { identifier, pass });
+  // 2. Fetch user profile from userTable
+  const userRecord = await fetchUserProfile(firebaseUser);
 
   return userRecord;
 }
 
 /**
- * Save user session and credentials to AsyncStorage and localStorage (browser)
- */
-export async function saveUserSession(
-  userRecord: UserRecord,
-  creds?: UserCredentials
-): Promise<void> {
-  try {
-    const json = JSON.stringify(userRecord);
-    await AsyncStorage.setItem(USER_SESSION_KEY, json);
-    if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
-      localStorage.setItem(USER_SESSION_KEY, json);
-    }
-
-    if (creds) {
-      const credsJson = JSON.stringify(creds);
-      await AsyncStorage.setItem(USER_CREDS_KEY, credsJson);
-      if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
-        localStorage.setItem(USER_CREDS_KEY, credsJson);
-      }
-    }
-  } catch (err) {
-    console.warn('Error saving user session:', err);
-  }
-}
-
-/**
- * Sign out and clear stored session and credentials
+ * Sign out and clear stored session.
  */
 export async function logoutUser(): Promise<void> {
+  console.log('[Auth] Logging out user...');
   try {
     await signOut(auth);
   } catch (err) {
-    console.warn('Sign out error:', err);
+    console.warn('[Auth] Sign out error:', err);
   }
-  try {
-    await AsyncStorage.removeItem(USER_SESSION_KEY);
-    await AsyncStorage.removeItem(USER_CREDS_KEY);
-    if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
-      localStorage.removeItem(USER_SESSION_KEY);
-      localStorage.removeItem(USER_CREDS_KEY);
-    }
-  } catch (err) {
-    console.warn('Error removing cached session:', err);
-  }
+  await clearUserSession();
+  console.log('[Auth] User successfully logged out and local session cleared.');
 }
 
 /**
- * Retrieve cached user from local storage (AsyncStorage + localStorage fallback)
- */
-export async function getCachedUser(): Promise<UserRecord | null> {
-  try {
-    const raw = await AsyncStorage.getItem(USER_SESSION_KEY);
-    if (raw) {
-      return JSON.parse(raw) as UserRecord;
-    }
-    if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
-      const webRaw = localStorage.getItem(USER_SESSION_KEY);
-      if (webRaw) {
-        return JSON.parse(webRaw) as UserRecord;
-      }
-    }
-  } catch (err) {
-    console.warn('Error reading cached user session:', err);
-  }
-  return null;
-}
-
-/**
- * Retrieve cached credentials from local storage
- */
-export async function getCachedCreds(): Promise<UserCredentials | null> {
-  try {
-    const raw = await AsyncStorage.getItem(USER_CREDS_KEY);
-    if (raw) {
-      return JSON.parse(raw) as UserCredentials;
-    }
-    if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
-      const webRaw = localStorage.getItem(USER_CREDS_KEY);
-      if (webRaw) {
-        return JSON.parse(webRaw) as UserCredentials;
-      }
-    }
-  } catch (err) {
-    console.warn('Error reading cached user credentials:', err);
-  }
-  return null;
-}
-
-/**
- * Subscribe to Firebase Auth state changes
+ * Subscribe to Firebase Auth state changes.
  */
 export function subscribeToAuthState(
   callback: (user: UserRecord | null) => void
 ) {
   return onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
+    console.log('[Auth] onAuthStateChanged fired. Authenticated user:', firebaseUser ? firebaseUser.uid : 'null');
     if (firebaseUser) {
       try {
-        const userDocRef = doc(db, 'userTable', firebaseUser.uid);
-        const userDoc = await getDoc(userDocRef);
-        if (userDoc.exists()) {
-          const data = userDoc.data() as UserRecord;
-          await saveUserSession(data);
-          callback(data);
-          return;
-        }
+        const profile = await fetchUserProfile(firebaseUser);
+        callback(profile);
       } catch (err) {
-        console.warn('Error reading userTable during auth state change:', err);
+        console.warn('[Auth] Error retrieving profile on auth state change:', err);
+        const fallback: UserRecord = {
+          userId: firebaseUser.uid,
+          name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
+          email: firebaseUser.email || '',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        await saveUserSession(fallback);
+        callback(fallback);
       }
-
-      const fallback: UserRecord = {
-        userId: firebaseUser.uid,
-        name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
-        email: firebaseUser.email || '',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      await saveUserSession(fallback);
-      callback(fallback);
     } else {
-      // Do not wipe cached session here because Firebase triggers null on startup
-      // before connecting or in offline/native initialization.
+      await clearUserSession();
       callback(null);
     }
   });

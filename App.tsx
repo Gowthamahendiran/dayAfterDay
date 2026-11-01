@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Platform, ActivityIndicator, Image } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Platform, ActivityIndicator, Image, Text } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { SignupScreen } from './src/screens/SignupScreen';
@@ -7,11 +7,11 @@ import { TodayTasksScreen } from './src/screens/TodayTasksScreen';
 import { CreateTaskScreen } from './src/screens/CreateTaskScreen';
 import { DashboardScreen } from './src/screens/DashboardScreen';
 import {
-  getCachedUser,
-  getCachedCreds,
-  loginUser,
+  waitForAuthReady,
+  fetchUserProfile,
   subscribeToAuthState,
   logoutUser,
+  cleanupLegacyCredentials,
   UserRecord,
 } from './src/services/authService';
 import { styles } from './src/styles/app.styles';
@@ -22,6 +22,7 @@ export default function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('login');
   const [currentUser, setCurrentUser] = useState<UserRecord | null>(null);
   const [isInitializing, setIsInitializing] = useState<boolean>(true);
+  const isInitializingRef = useRef<boolean>(false);
 
   // Global web CSS injection to prevent input focus outlines
   useEffect(() => {
@@ -47,72 +48,92 @@ export default function App() {
     }
   }, []);
 
-  // Check persistent storage on startup & subscribe to Firebase auth state
+  // Application Launch:
+  // 1. Initialize Firebase Auth session check
+  // 2. Wait for auth state confirmation (persisted session check)
+  // 3. If valid authenticated session exists -> retrieve UID, load user, navigate to dashboard/tasks
+  // 4. If no session exists -> navigate directly to login screen
   useEffect(() => {
     let isMounted = true;
+    let authUnsubscribe: (() => void) | null = null;
 
-    // 1. Immediately check cached session & credentials in local storage
-    const restoreSession = async () => {
+    if (isInitializingRef.current) return;
+    isInitializingRef.current = true;
+
+    const initializeAuthFlow = async () => {
       try {
-        const cached = await getCachedUser();
-        if (cached && isMounted) {
-          setCurrentUser(cached);
-          setCurrentScreen('tasks');
-          setIsInitializing(false);
-        }
+        console.log('[App] Application launched. Initializing Firebase Authentication...');
+        await cleanupLegacyCredentials();
 
-        // Auto-login with saved credentials in the background
-        const creds = await getCachedCreds();
-        if (creds) {
-          try {
-            const user = await loginUser(creds.identifier, creds.pass);
-            if (isMounted) {
-              setCurrentUser(user);
-              setCurrentScreen('tasks');
-            }
-          } catch (autoLoginErr) {
-            console.log('Silent auto-login background note:', autoLoginErr);
+        // Wait for Firebase Auth to restore persisted session
+        const firebaseUser = await waitForAuthReady();
+
+        if (!isMounted) return;
+
+        if (firebaseUser) {
+          console.log('[App] Persisted session confirmed for UID:', firebaseUser.uid);
+          const userRecord = await fetchUserProfile(firebaseUser);
+          if (isMounted) {
+            setCurrentUser(userRecord);
+            setCurrentScreen('tasks');
+            setIsInitializing(false);
+          }
+        } else {
+          console.log('[App] No persisted session found. Navigating to login.');
+          if (isMounted) {
+            setCurrentUser(null);
+            setCurrentScreen('login');
+            setIsInitializing(false);
           }
         }
       } catch (err) {
-        console.warn('Session restore note:', err);
-      } finally {
+        console.error('[App] Auth initialization error:', err);
         if (isMounted) {
+          setCurrentUser(null);
+          setCurrentScreen('login');
           setIsInitializing(false);
         }
       }
+
+      // Listen for subsequent auth changes (sign-in, sign-out, token refresh)
+      authUnsubscribe = subscribeToAuthState((user) => {
+        if (!isMounted) return;
+        if (user) {
+          console.log('[App] Auth state updated: logged in as UID:', user.userId);
+          setCurrentUser(user);
+        } else {
+          console.log('[App] Auth state updated: user signed out.');
+          setCurrentUser(null);
+          setCurrentScreen('login');
+        }
+      });
     };
 
-    restoreSession();
-
-    // 2. Subscribe to Firebase Auth state changes
-    const unsubscribe = subscribeToAuthState((user) => {
-      if (!isMounted) return;
-      if (user) {
-        setCurrentUser(user);
-        setCurrentScreen('tasks');
-        setIsInitializing(false);
-      }
-    });
+    initializeAuthFlow();
 
     return () => {
       isMounted = false;
-      unsubscribe();
+      if (authUnsubscribe) authUnsubscribe();
     };
   }, []);
 
   const handleLogout = async () => {
-    await logoutUser();
+    try {
+      await logoutUser();
+    } catch (e) {
+      console.warn('[App] Logout note:', e);
+    }
     setCurrentUser(null);
     setCurrentScreen('login');
   };
 
   const handleAuthSuccess = (user: UserRecord) => {
+    console.log('[App] Auth success for UID:', user.userId);
     setCurrentUser(user);
     setCurrentScreen('tasks');
   };
 
-  // Splash loading screen while restoring persistent session
+  // Clean loading / splash screen while confirming persisted authentication state
   if (isInitializing) {
     return (
       <View
@@ -127,6 +148,9 @@ export default function App() {
           resizeMode="contain"
         />
         <ActivityIndicator size="large" color="#5246e2" />
+        <Text style={{ marginTop: 14, fontSize: 14, color: '#64748b', fontWeight: '500' }}>
+          Initializing DayAfterDay...
+        </Text>
       </View>
     );
   }
@@ -146,21 +170,21 @@ export default function App() {
           onSignupSuccess={handleAuthSuccess}
         />
       )}
-      {currentScreen === 'tasks' && (
+      {currentScreen === 'tasks' && currentUser && (
         <TodayTasksScreen
           user={currentUser}
           onNavigate={setCurrentScreen}
           onLogout={handleLogout}
         />
       )}
-      {currentScreen === 'create-task' && (
+      {currentScreen === 'create-task' && currentUser && (
         <CreateTaskScreen
-          userId={currentUser?.userId || ''}
+          userId={currentUser.userId}
           onBack={() => setCurrentScreen('tasks')}
           onSuccess={() => setCurrentScreen('tasks')}
         />
       )}
-      {currentScreen === 'dashboard' && (
+      {currentScreen === 'dashboard' && currentUser && (
         <DashboardScreen
           user={currentUser}
           onLogout={handleLogout}
